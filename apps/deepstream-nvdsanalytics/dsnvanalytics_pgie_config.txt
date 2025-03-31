@@ -55,16 +55,16 @@
 [property]
 gpu-id=0
 net-scale-factor=0.00392156862745098
-onnx-file=../../../../samples/models/Primary_Detector/resnet18_trafficcamnet_pruned.onnx
-model-engine-file=../../../../samples/models/Primary_Detector/resnet18_trafficcamnet_pruned.onnx_b1_gpu0_int8.engine
-labelfile-path=../../../../samples/models/Primary_Detector/labels.txt
-int8-calib-file=../../../../samples/models/Primary_Detector/cal_trt.bin
+onnx-file=/opt/nvidia/deepstream/deepstream/samples/models/PeopleNet/resnet34_peoplenet.onnx
+model-engine-file=/opt/nvidia/deepstream/deepstream/samples/models/PeopleNet/resnet34_peoplenet.onnx_b1_gpu0_int8.engine
+labelfile-path=/opt/nvidia/deepstream/deepstream/samples/models/PeopleNet/labels.txt
+int8-calib-file=/opt/nvidia/deepstream/deepstream/samples/models/PeopleNet/resnet34_peoplenet_int8.txt
 batch-size=1
 process-mode=1
 model-color-format=0
 ## 0=FP32, 1=INT8, 2=FP16 mode
 network-mode=1
-num-detected-classes=4
+num-detected-classes=1
 interval=0
 gie-unique-id=1
 #scaling-filter=0
@@ -73,5 +73,5 @@ cluster-mode=2
 
 [class-attrs-all]
 pre-cluster-threshold=0.2
-topk=20
-nms-iou-threshold=0.5
+topk=10
+nms-iou-threshold=0.6

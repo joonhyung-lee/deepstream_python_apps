@@ -17,6 +17,15 @@
 # limitations under the License.
 ################################################################################
 
+"""
+For video
+python3 deepstream_nvdsanalytics.py file:///home/atlo/Downloads/video/test4.mp4 
+python3 deepstream_nvdsanalytics.py file:///home/atlo/Downloads/nmixx.mp4 
+
+For webcam
+python3 deepstream_nvdsanalytics.py
+"""
+
 import sys
 sys.path.append('../')
 import gi
@@ -37,19 +46,20 @@ import pyds
 perf_data = None
 
 MAX_DISPLAY_LEN=64
-PGIE_CLASS_ID_VEHICLE = 0
-PGIE_CLASS_ID_BICYCLE = 1
 PGIE_CLASS_ID_PERSON = 2
-PGIE_CLASS_ID_ROADSIGN = 3
-MUXER_OUTPUT_WIDTH=1920
-MUXER_OUTPUT_HEIGHT=1080
 MUXER_BATCH_TIMEOUT_USEC = 33000
-TILED_OUTPUT_WIDTH=1280
-TILED_OUTPUT_HEIGHT=720
+MUXER_OUTPUT_WIDTH=640
+MUXER_OUTPUT_HEIGHT=480
+TILED_OUTPUT_WIDTH=640
+TILED_OUTPUT_HEIGHT=480
+# MUXER_OUTPUT_WIDTH=1920
+# MUXER_OUTPUT_HEIGHT=1080
+# TILED_OUTPUT_WIDTH=1280
+# TILED_OUTPUT_HEIGHT=720
 GST_CAPS_FEATURES_NVMM="memory:NVMM"
 OSD_PROCESS_MODE= 0
 OSD_DISPLAY_TEXT= 1
-pgie_classes_str= ["Vehicle", "TwoWheeler", "Person","RoadSign"]
+pgie_classes_str= ["Person"] # Only detect person
 
 # nvanlytics_src_pad_buffer_probe  will extract metadata received on nvtiler sink pad
 # and update params for drawing rectangle, object information etc.
@@ -82,38 +92,34 @@ def nvanalytics_src_pad_buffer_probe(pad,info,u_data):
         l_obj=frame_meta.obj_meta_list
         num_rects = frame_meta.num_obj_meta
         obj_counter = {
-        PGIE_CLASS_ID_VEHICLE:0,
-        PGIE_CLASS_ID_PERSON:0,
-        PGIE_CLASS_ID_BICYCLE:0,
-        PGIE_CLASS_ID_ROADSIGN:0
+            PGIE_CLASS_ID_PERSON:0
         }
         print("#"*50)
         while l_obj:
-            try: 
+            try:
                 # Note that l_obj.data needs a cast to pyds.NvDsObjectMeta
                 # The casting is done by pyds.NvDsObjectMeta.cast()
                 obj_meta=pyds.NvDsObjectMeta.cast(l_obj.data)
             except StopIteration:
                 break
-            obj_counter[obj_meta.class_id] += 1
-            l_user_meta = obj_meta.obj_user_meta_list
-            # Extract object level meta data from NvDsAnalyticsObjInfo
-            while l_user_meta:
-                try:
-                    user_meta = pyds.NvDsUserMeta.cast(l_user_meta.data)
-                    if user_meta.base_meta.meta_type == pyds.nvds_get_user_meta_type("NVIDIA.DSANALYTICSOBJ.USER_META"):             
-                        user_meta_data = pyds.NvDsAnalyticsObjInfo.cast(user_meta.user_meta_data)
-                        if user_meta_data.dirStatus: print("Object {0} moving in direction: {1}".format(obj_meta.object_id, user_meta_data.dirStatus))                    
-                        if user_meta_data.lcStatus: print("Object {0} line crossing status: {1}".format(obj_meta.object_id, user_meta_data.lcStatus))
-                        if user_meta_data.ocStatus: print("Object {0} overcrowding status: {1}".format(obj_meta.object_id, user_meta_data.ocStatus))
-                        if user_meta_data.roiStatus: print("Object {0} roi status: {1}".format(obj_meta.object_id, user_meta_data.roiStatus))
-                except StopIteration:
-                    break
-
-                try:
-                    l_user_meta = l_user_meta.next
-                except StopIteration:
-                    break
+            
+            # Person 클래스만 처리
+            if obj_meta.class_id == PGIE_CLASS_ID_PERSON:
+                obj_counter[obj_meta.class_id] += 1
+                l_user_meta = obj_meta.obj_user_meta_list
+                while l_user_meta:
+                    try:
+                        user_meta = pyds.NvDsUserMeta.cast(l_user_meta.data)
+                        if user_meta.base_meta.meta_type == pyds.nvds_get_user_meta_type("NVIDIA.DSANALYTICSOBJ.USER_META"):             
+                            user_meta_data = pyds.NvDsAnalyticsObjInfo.cast(user_meta.user_meta_data)
+                            if user_meta_data.roiStatus: 
+                                print("Person {0} roi status: {1}".format(obj_meta.object_id, user_meta_data.roiStatus))
+                    except StopIteration:
+                        break
+                    try:
+                        l_user_meta = l_user_meta.next
+                    except StopIteration:
+                        break
             try: 
                 l_obj=l_obj.next
             except StopIteration:
@@ -126,10 +132,8 @@ def nvanalytics_src_pad_buffer_probe(pad,info,u_data):
                 user_meta = pyds.NvDsUserMeta.cast(l_user.data)
                 if user_meta.base_meta.meta_type == pyds.nvds_get_user_meta_type("NVIDIA.DSANALYTICSFRAME.USER_META"):
                     user_meta_data = pyds.NvDsAnalyticsFrameMeta.cast(user_meta.user_meta_data)
-                    if user_meta_data.objInROIcnt: print("Objs in ROI: {0}".format(user_meta_data.objInROIcnt))                    
-                    if user_meta_data.objLCCumCnt: print("Linecrossing Cumulative: {0}".format(user_meta_data.objLCCumCnt))
-                    if user_meta_data.objLCCurrCnt: print("Linecrossing Current Frame: {0}".format(user_meta_data.objLCCurrCnt))
-                    if user_meta_data.ocStatus: print("Overcrowding status: {0}".format(user_meta_data.ocStatus))
+                    if user_meta_data.objInROIcnt: 
+                        print("People in ROI: {0}".format(user_meta_data.objInROIcnt))
             except StopIteration:
                 break
             try:
@@ -137,7 +141,8 @@ def nvanalytics_src_pad_buffer_probe(pad,info,u_data):
             except StopIteration:
                 break
         
-        print("Frame Number=", frame_number, "stream id=", frame_meta.pad_index, "Number of Objects=",num_rects,"Vehicle_count=",obj_counter[PGIE_CLASS_ID_VEHICLE],"Person_count=",obj_counter[PGIE_CLASS_ID_PERSON])
+        print("Frame Number=", frame_number, "stream id=", frame_meta.pad_index, 
+              "Number of Objects=",num_rects,"Person_count=",obj_counter[PGIE_CLASS_ID_PERSON])
         # Update frame rate through this probe
         stream_index = "stream{0}".format(frame_meta.pad_index)
         global perf_data
@@ -149,8 +154,6 @@ def nvanalytics_src_pad_buffer_probe(pad,info,u_data):
         print("#"*50)
 
     return Gst.PadProbeReturn.OK
-
-
 
 def cb_newpad(decodebin, decoder_src_pad,data):
     print("In cb_newpad\n")
@@ -181,51 +184,81 @@ def decodebin_child_added(child_proxy,Object,name,user_data):
     if(name.find("decodebin") != -1):
         Object.connect("child-added",decodebin_child_added,user_data)
 
-def create_source_bin(index,uri):
+def create_source_bin(index, uri):
     print("Creating source bin")
-
-    # Create a source GstBin to abstract this bin's content from the rest of the
-    # pipeline
-    bin_name="source-bin-%02d" %index
+    bin_name = "source-bin-%02d" % index
     print(bin_name)
-    nbin=Gst.Bin.new(bin_name)
+    nbin = Gst.Bin.new(bin_name)
     if not nbin:
         sys.stderr.write(" Unable to create source bin \n")
 
-    # Source element for reading from the uri.
-    # We will use decodebin and let it figure out the container format of the
-    # stream and the codec and plug the appropriate demux and decode plugins.
-    uri_decode_bin=Gst.ElementFactory.make("uridecodebin", "uri-decode-bin")
-    if not uri_decode_bin:
-        sys.stderr.write(" Unable to create uri decode bin \n")
-    # We set the input uri to the source element
-    uri_decode_bin.set_property("uri",uri)
-    # Connect to the "pad-added" signal of the decodebin which generates a
-    # callback once a new pad for raw data has beed created by the decodebin
-    uri_decode_bin.connect("pad-added",cb_newpad,nbin)
-    uri_decode_bin.connect("child-added",decodebin_child_added,nbin)
+    # 웹캠인 경우 v4l2src를 사용
+    if uri.startswith('v4l2://'):
+        # v4l2src 요소 생성
+        source = Gst.ElementFactory.make("v4l2src", "usb-cam-source")
+        if not source:
+            sys.stderr.write(" Unable to create v4l2src \n")
+        
+        # 장치 경로 설정
+        source.set_property('device', uri.replace('v4l2://', ''))
+        
+        # nvvideoconvert를 사용하여 NVIDIA 포맷으로 변환
+        nvvidconv_src = Gst.ElementFactory.make("nvvideoconvert", "convertor_src")
+        if not nvvidconv_src:
+            sys.stderr.write(" Unable to create nvvideoconvert \n")
+        
+        # 캡스 필터 추가
+        caps_vidconv = Gst.ElementFactory.make("capsfilter", "nvmm_caps")
+        if not caps_vidconv:
+            sys.stderr.write(" Unable to create capsfilter \n")
+        
+        # NVIDIA 메모리 포맷으로 설정
+        caps_vidconv.set_property('caps', 
+            Gst.Caps.from_string("video/x-raw(memory:NVMM), format=NV12"))
+        
+        # 빈에 요소들 추가
+        nbin.add(source)
+        nbin.add(nvvidconv_src)
+        nbin.add(caps_vidconv)
+        
+        # 요소들 연결
+        source.link(nvvidconv_src)
+        nvvidconv_src.link(caps_vidconv)
+        
+        # 고스트 패드 생성
+        srcpad = caps_vidconv.get_static_pad("src")
+        
+    else:
+        # 기존 파일/RTSP 스트림용 코드
+        uri_decode_bin = Gst.ElementFactory.make("uridecodebin", "uri-decode-bin")
+        if not uri_decode_bin:
+            sys.stderr.write(" Unable to create uri decode bin \n")
+        uri_decode_bin.set_property("uri", uri)
+        uri_decode_bin.connect("pad-added", cb_newpad, nbin)
+        uri_decode_bin.connect("child-added", decodebin_child_added, nbin)
+        Gst.Bin.add(nbin, uri_decode_bin)
+        srcpad = None
 
-    # We need to create a ghost pad for the source bin which will act as a proxy
-    # for the video decoder src pad. The ghost pad will not have a target right
-    # now. Once the decode bin creates the video decoder and generates the
-    # cb_newpad callback, we will set the ghost pad target to the video decoder
-    # src pad.
-    Gst.Bin.add(nbin,uri_decode_bin)
-    bin_pad=nbin.add_pad(Gst.GhostPad.new_no_target("src",Gst.PadDirection.SRC))
-    if not bin_pad:
-        sys.stderr.write(" Failed to add ghost pad in source bin \n")
-        return None
+    if srcpad:
+        ghostpad = Gst.GhostPad.new("src", srcpad)
+        if not ghostpad:
+            sys.stderr.write(" Failed to create ghost pad \n")
+            return None
+        nbin.add_pad(ghostpad)
+
     return nbin
 
 def main(args):
-    # Check input arguments
-    if len(args) < 2:
-        sys.stderr.write("usage: %s <uri1> [uri2] ... [uriN]\n" % args[0])
-        sys.exit(1)
-
+    # 입력 인자가 없으면 /dev/video0 사용
+    if len(args) == 1:
+        print("No input provided. Using default webcam (/dev/video0)")
+        args.append("v4l2:///dev/video0")
+    
+    # number_sources 계산 수정
+    number_sources = len(args) - 1  # 최소 1개의 소스 보장
+    
     global perf_data
-    perf_data = PERF_DATA(len(args) - 1)
-    number_sources=len(args)-1
+    perf_data = PERF_DATA(number_sources)
 
     platform_info = PlatformInfo()
     # Standard GStreamer initialization
@@ -331,22 +364,24 @@ def main(args):
         print("Atleast one of the sources is live")
         streammux.set_property('live-source', 1)
 
-    streammux.set_property('width', 1920)
-    streammux.set_property('height', 1080)
+    streammux.set_property('width', MUXER_OUTPUT_WIDTH)
+    streammux.set_property('height', MUXER_OUTPUT_HEIGHT)
     streammux.set_property('batch-size', number_sources)
     streammux.set_property('batched-push-timeout', MUXER_BATCH_TIMEOUT_USEC)
     pgie.set_property('config-file-path', "dsnvanalytics_pgie_config.txt")
-    pgie_batch_size=pgie.get_property("batch-size")
+    pgie_batch_size = pgie.get_property("batch-size")
     if(pgie_batch_size != number_sources):
-        print("WARNING: Overriding infer-config batch-size",pgie_batch_size," with number of sources ", number_sources," \n")
-        pgie.set_property("batch-size",number_sources)
-    tiler_rows=int(math.sqrt(number_sources))
-    tiler_columns=int(math.ceil((1.0*number_sources)/tiler_rows))
-    tiler.set_property("rows",tiler_rows)
-    tiler.set_property("columns",tiler_columns)
+        print("WARNING: Overriding infer-config batch-size", pgie_batch_size, " with number of sources ", number_sources)
+        pgie.set_property("batch-size", max(1, number_sources))  # 최소 1 보장
+    tiler_rows = max(1, int(math.sqrt(number_sources)))  # 최소 1 보장
+    tiler_columns = max(1, int(math.ceil((1.0 * number_sources) / tiler_rows)))  # 최소 1 보장
+    tiler.set_property("rows", tiler_rows)
+    tiler.set_property("columns", tiler_columns)
     tiler.set_property("width", TILED_OUTPUT_WIDTH)
     tiler.set_property("height", TILED_OUTPUT_HEIGHT)
     sink.set_property("qos",0)
+    sink.set_property("sync", 0)
+    sink.set_property("async", False)
 
     #Set properties of tracker
     config = configparser.ConfigParser()
